@@ -1,0 +1,33 @@
+{
+  "library": "browser_use",
+  "mode": "local",
+  "model": "openai/gpt-oss-120b",
+  "runs": [
+    {
+      "run": 1,
+      "llm_calls": 22,
+      "input_tokens": 283679,
+      "output_tokens": 19573,
+      "cached_input_tokens": 0,
+      "cache_hits": 0,
+      "duration_ms": 86356
+    },
+    {
+      "run": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_hits": 1,
+      "duration_ms": 103702
+    },
+    {
+      "run": 3,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_hits": 1,
+      "duration_ms": 104331
+    }
+  ],
+  "timestamp": "2026-04-22T00:40:07.322051"
+}

@@ -68,19 +68,21 @@ async with await browser.new_context() as ctx:
 
 Closest to Playwright. No LLM involved unless you wire one in yourself.
 
-### 2.4 Per-step Agent: `max_steps=1` + `add_new_task()`
+### 2.4 Per-step Agent: `max_steps=2` + `add_new_task()`
 The closest thing to Stagehand's `act()` **without** leaving the Agent abstraction.
 
 ```python
 agent = Agent(task=steps[0], llm=llm, use_vision=False)
-await agent.run(max_steps=1)
+await agent.run(max_steps=2)
 
 for step in steps[1:]:
     agent.add_new_task(step)
-    await agent.run(max_steps=1)
+    await agent.run(max_steps=2)
 ```
 
 Browser state persists across calls. Message history accumulates inside the Agent — so per-step prompts grow over time.
+
+> **Why `max_steps=2`, not `1`.** At `max_steps=1`, browser_use flags step 0 as `is_last_step()` and injects a prompt constraining the LLM to the `done` tool only (see `_force_done_after_last_step` in `agent/service.py`). Result: the model never clicks, it just emits `done`. `max_steps=2` gives one real action step and one forced-done step, which is the minimum viable atomic act. Expect ~2 LLM calls per atomic instruction, not 1.
 
 ### 2.5 Fresh Agent per step, shared session
 Most Stagehand-like. New Agent context each step, but same browser.
@@ -157,7 +159,8 @@ for i, step in enumerate(steps):
 
 To replicate `act()` as closely as possible in browser_use:
 
-- **Use pattern 2.5**: fresh `Agent(task=step, browser_session=shared_session, max_steps=1)` per step.
+- **Use pattern 2.5**: fresh `Agent(task=step, browser_session=shared_session).run(max_steps=2)` per step. (`max_steps=1` is broken — see 2.4.)
+- **Set `BrowserSession(keep_alive=True)`**: otherwise `Agent.close()` kills the shared session at the end of each `run()` and every act reopens the browser.
 - **Cache per step**: one `AgentHistoryList` file per step index, replay via `rerun_history()` on hits.
 - **Keep `use_vision=False`** to match Stagehand's default and keep token costs comparable.
 - **Keep step instructions atomic** — one observable action per step — so `max_steps=1` is actually sufficient.
@@ -170,8 +173,10 @@ For the `compare.py` benchmark specifically: refactor `browser_use/scraper.py` s
 ## 6. Quick reference
 
 ```
-Stagehand act("X")        ≈  Agent(task="X", browser_session=s, max_steps=1).run()
+Stagehand act("X")        ≈  Agent(task="X", browser_session=s).run(max_steps=2)
 Stagehand observe()       ≈  DomService(page).get_clickable_elements()
 Stagehand extract(schema) ≈  @controller.action with Pydantic output_model
 Stagehand act cache       ≈  per-step AgentHistoryList saved to disk
 ```
+
+Note: `max_steps=1` is a trap — browser_use forces the LLM into a done-only schema on the last step, so a single-step act never actually executes the action. See section 2.4 for why `max_steps=2` is the floor.

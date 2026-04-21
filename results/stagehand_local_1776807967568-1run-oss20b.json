@@ -1,0 +1,35 @@
+{
+  "library": "stagehand",
+  "mode": "local",
+  "model": "groq/openai/gpt-oss-20b",
+  "runs": [
+    {
+      "run": 1,
+      "llm_calls": 13,
+      "input_tokens": 131521,
+      "output_tokens": 5422,
+      "cached_input_tokens": 5376,
+      "cache_hits": 0,
+      "duration_ms": 64696
+    },
+    {
+      "run": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_input_tokens": 0,
+      "cache_hits": 10,
+      "duration_ms": 9646
+    },
+    {
+      "run": 3,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_input_tokens": 0,
+      "cache_hits": 10,
+      "duration_ms": 9374
+    }
+  ],
+  "timestamp": "2026-04-21T21:46:07.568Z"
+}

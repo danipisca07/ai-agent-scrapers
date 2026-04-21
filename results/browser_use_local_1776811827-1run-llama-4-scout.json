@@ -1,0 +1,36 @@
+{
+  "library": "browser_use",
+  "mode": "local",
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+  "runs": [
+    {
+      "run": 1,
+      "llm_calls": 33,
+      "input_tokens": 425569,
+      "output_tokens": 8819,
+      "cached_input_tokens": 0,
+      "cache_hits": 0,
+      "duration_ms": 163791,
+      "error": "Did not correctly click on all links, even if the agent tought it did."
+    },
+    {
+      "run": 2,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_hits": 0,
+      "duration_ms": 27956,
+      "error": "cache replay failed: Step 1 failed after 3 attempts: Expected at least one handler to return a non-None result, but none did! ?\u25b6 BrowserStateRequestEvent#6495 \u2705 -> {'1237304949984.1237447160256': browser_use.browser.watchdog_base.DownloadsWatchdog.on_BrowserStateRequestEvent#0256() \u2705, '1237304949984.1237447130832': browser_use.browser.watchdog_base.DOMWatchdog.on_BrowserStateRequestEvent#0832() \u2705}"
+    },
+    {
+      "run": 3,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cache_hits": 0,
+      "duration_ms": 31223,
+      "error": "cache replay failed: Initial actions failed after 3 attempts: Expected at least one handler to return a non-None result, but none did! ?\u25b6 BrowserStateRequestEvent#26e7 \u2705 -> {'1237268978400.1237440344336': browser_use.browser.watchdog_base.DownloadsWatchdog.on_BrowserStateRequestEvent#4336() \u2705, '1237268978400.1237316960848': browser_use.browser.watchdog_base.DOMWatchdog.on_BrowserStateRequestEvent#0848() \u2705}"
+    }
+  ],
+  "timestamp": "2026-04-22T00:50:27.371516"
+}
