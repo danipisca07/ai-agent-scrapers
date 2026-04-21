@@ -1,9 +1,21 @@
 import "dotenv/config";
 import { CustomOpenAIClient, Stagehand } from "@browserbasehq/stagehand";
 import OpenAI from "openai";
-import { z } from "zod";
+import { registry, z } from "zod";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
+
+const CACHE_DIR = path.resolve("./cache/stagehand");
+
+function invalidateActCache(instruction: string, pageUrl: string): void {
+  const key = crypto
+    .createHash("sha256")
+    .update(JSON.stringify({ instruction: instruction.trim(), url: pageUrl, variableKeys: [] }))
+    .digest("hex");
+  const file = path.join(CACHE_DIR, `${key}.json`);
+  try { fs.unlinkSync(file); } catch { /* not cached, ignore */ }
+}
 
 const runs = parseInt(process.env.RUNS || "3")
 const mode = process.env.MODE === "BROWSERBASE" ? "cloud" : "local";
@@ -11,18 +23,19 @@ const model = process.env.MODEL_NAME || "default";
 
 // ─── Metriche ─────────────────────────────────────────────────────────────────
 interface RunResult {
-  run:           number;
-  llm_calls:     number;
-  input_tokens:  number;
-  output_tokens: number;
-  cache_hits:    number;
-  duration_ms:   number;
-  error?:        string;
+  run:                  number;
+  llm_calls:            number;
+  input_tokens:         number;
+  output_tokens:        number;
+  cached_input_tokens:  number;
+  cache_hits:           number;
+  duration_ms:          number;
+  error?:               string;
 }
 
 // ─── Singolo run ──────────────────────────────────────────────────────────────
 async function runOnce(runIndex: number): Promise<RunResult> {
-  let llm_calls = 0, input_tokens = 0, output_tokens = 0, cache_hits = 0;
+  let llm_calls = 0, input_tokens = 0, output_tokens = 0, cached_input_tokens = 0, cache_hits = 0;
   const start = Date.now();
   let storiesTotal = 0;
   let error: string | undefined;
@@ -30,6 +43,14 @@ async function runOnce(runIndex: number): Promise<RunResult> {
   const stagehand = new Stagehand({
     env:   "LOCAL",
     model: process.env.MODEL_NAME,
+    selfHeal: false,
+    // llmClient: new CustomOpenAIClient({
+    //   modelName: "qwen3.5:9b",
+    //   client: new OpenAI({
+    //       apiKey: "ollama",
+    //       baseURL: "http://localhost:11434/v1"
+    //     }),
+    //   }),
     cacheDir: "./cache/stagehand",
     verbose: 2,
     // Tracking tokens via logger
@@ -45,6 +66,7 @@ async function runOnce(runIndex: number): Promise<RunResult> {
         llm_calls++;
         input_tokens  += usage.inputTokens;
         output_tokens += usage.outputTokens;
+        cached_input_tokens += usage.cachedInputTokens;
       }
     },
   });
@@ -63,13 +85,48 @@ async function runOnce(runIndex: number): Promise<RunResult> {
       waitUntil: "domcontentloaded",
     });
 
-    for (let rank = 1; rank <= 10; rank++){
-      //Open first 10 stories
-      await stagehand.act("Open (not upvote) story in rank " + rank); //here the LLM call is cached for each rank (the first run needs to call the LLM 10 times)
+    let retries = 0;
+    const max_retries = 3;
+    for (let rank = 1; rank <= 10;){
+      try {
+        //Open first 10 stories
+        let options = {
+          model: retries > 0 ? "groq/openai/gpt-oss-120b" : undefined
+        }
+        let action = "Click on story title in rank " + rank
+        var actRes = await stagehand.act(action, options); //here the LLM call is cached for each rank (the first run needs to call the LLM 10 times)
 
-      await new Promise(r => setTimeout(r, 500));
-      //Go back to list
-      await page.goBack();
+        await new Promise(r => setTimeout(r, 500));
+
+        const currentUrl = page.url();
+        const actionIsValid = !currentUrl.includes("ycombinator.com");
+
+        //Go back to list
+        await page.goBack();
+
+        if (actionIsValid){
+          if(retries > 0)
+            console.log("Rank " + rank + " completed after " + retries + " retries.")
+          rank++;
+          retries = 0;
+        } else  {
+          invalidateActCache(action, "https://news.ycombinator.com/news");
+          retries++;
+        }
+
+        if(retries>max_retries)
+          throw "Even after retrying " + (retries - 1) + " times didn't manage to navigate to link in rank " + rank;
+      } catch (e: any ){
+        if (e.message?.includes("-32000")) {
+          // CDP context destroyed by navigation — navigate back and continue
+          //await page.goto("https://news.ycombinator.com/news", { waitUntil: "domcontentloaded" });
+        } else {
+          if(retries < max_retries)
+            retries++;
+          else 
+            throw e;
+        }
+      }
     }
 
 
@@ -84,6 +141,7 @@ async function runOnce(runIndex: number): Promise<RunResult> {
     llm_calls,
     input_tokens,
     output_tokens,
+    cached_input_tokens,
     cache_hits,
     duration_ms: Date.now() - start,
     ...(error ? { error } : {}),
@@ -102,7 +160,7 @@ async function main() {
     runResults.push(m);
     const ok = m.error ? `ERROR: ${m.error}` : `OK`;
     console.log(
-      `calls:${m.llm_calls}  in:${m.input_tokens}  out:${m.output_tokens}  ` +
+      `calls:${m.llm_calls}  in:${m.input_tokens}  cached_in:${m.cached_input_tokens}  out:${m.output_tokens}  ` +
       `cache:${m.cache_hits}  ${m.duration_ms}ms  ${ok}`
     );
   }
