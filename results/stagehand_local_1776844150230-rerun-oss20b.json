@@ -1,0 +1,38 @@
+{
+  "library": "stagehand",
+  "mode": "local",
+  "model": "groq/meta-llama/llama-4-scout-17b-16e-instruct",
+  "runs": [
+    {
+      "run": 1,
+      "llm_calls": 0,
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "cached_input_tokens": 0,
+      "cache_hits": 3,
+      "duration_ms": 13664,
+      "error": "No object generated: response did not match schema."
+    },
+    {
+      "run": 2,
+      "llm_calls": 1,
+      "input_tokens": 10070,
+      "output_tokens": 45,
+      "cached_input_tokens": null,
+      "cache_hits": 2,
+      "duration_ms": 8089,
+      "error": "No object generated: response did not match schema."
+    },
+    {
+      "run": 3,
+      "llm_calls": 3,
+      "input_tokens": 30362,
+      "output_tokens": 709,
+      "cached_input_tokens": null,
+      "cache_hits": 3,
+      "duration_ms": 13777,
+      "error": "No object generated: response did not match schema."
+    }
+  ],
+  "timestamp": "2026-04-22T07:49:10.229Z"
+}
