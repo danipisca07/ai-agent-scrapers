@@ -1,81 +1,205 @@
-# browser-ai-benchmark
+# Stagehand vs Browser Use — Browser Automation Benchmark
 
-Misura LLM calls e token consumati da **Stagehand** e **Browser Use** sullo stesso task
-(scraping HackerNews con paginazione) con diverse configurazioni.
+Measures LLM calls and token consumption for **Stagehand** and **Browser Use** executing the same browser automation task, across different models and execution strategies.
 
-## Struttura
+The benchmark runs the same task multiple times in sequence to evaluate caching behavior, and supports re-running after page content changes to test cache invalidation.
+
+Results from a concrete comparison run are documented in [`results/Results.md`](results/Results.md).
+
+---
+
+## Repository structure
 
 ```
-benchmark/
-├── stagehand/       # TypeScript — Stagehand + Playwright
-├── browser_use/     # Python — Browser Use (locale o cloud)
-├── results/         # JSON output dei run (ignorato da git tranne .gitkeep)
-└── compare.py       # Legge results/ e stampa tabella comparativa
-```
-
-## Setup
-
-### 1. Variabili d'ambiente
-
-```bash
-cp .env.example .env
-# Modifica .env con le tue chiavi
-```
-
-### 2. Stagehand (Node.js ≥ 18)
-
-```bash
-cd stagehand && npm install
-```
-
-### 3. Browser Use (Python ≥ 3.11)
-
-```bash
-cd browser_use && pip install -r requirements.txt
-# Installa Playwright browsers:
-playwright install chromium
-```
-
-### 4. Ollama (solo per local mode)
-
-```bash
-ollama pull llama3.2   # o il modello che preferisci
+stagehand-vs-browseruse/
+├── stagehand/
+│   ├── index.ts           # Stagehand script (TypeScript)
+│   ├── .env.example
+│   └── package.json
+├── browser_use/
+│   ├── scraper-agent.py   # Browser Use — full agent mode
+│   ├── scraper.py         # Browser Use — act-equivalent (one agent per step)
+│   ├── .env.example
+│   └── requirements.txt
+├── results/               # JSON output from each run + Results.md summary
+└── compare.py             # Reads results/ and prints a comparison table
 ```
 
 ---
 
-## Esecuzione
+## Setup
+
+### Requirements
+
+- Node.js ≥ 18 (for Stagehand)
+- Python ≥ 3.11 (for Browser Use)
+- A [Groq](https://console.groq.com) API key (both libraries use Groq-hosted models in this benchmark)
 
 ### Stagehand
 
 ```bash
 cd stagehand
-
-# Locale (Ollama)
-MODE=local MODEL_NAME=llama3.2 PAGES=3 RUNS=3 npm start
-
-# Cloud (Browserbase — richiede BROWSERBASE_API_KEY e PROJECT_ID in .env)
-MODE=cloud MODEL_NAME=gpt-4o-mini PAGES=3 RUNS=3 npm start
+npm install
+cp .env.example .env
+# Edit .env and set MODEL_NAME and any other required keys
 ```
 
 ### Browser Use
 
 ```bash
 cd browser_use
-
-# Locale (Ollama)
-MODE=local MODEL_NAME=llama3.2 PAGES=3 RUNS=3 python scraper.py
-
-# Cloud (Browser Use Cloud — richiede BROWSER_USE_API_KEY in .env)
-MODE=cloud PAGES=3 RUNS=3 python scraper.py
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+cp .env.example .env
+# Edit .env and set GROQ_API_KEY and MODEL_NAME
 ```
 
-> **RUNS=3** è il parametro chiave per osservare il caching:
-> il run 1 è sempre a freddo, dal run 2 in poi si vede se la cache è efficace.
+---
 
-### Confronto
+## Defining your own task
 
-Dopo aver eseguito almeno un run per libreria:
+Each script has a clearly marked section where you define what the browser should do. Replace the example task with your own sequence of actions.
+
+### Stagehand — `stagehand/index.ts`
+
+Find the comment block starting at line 78:
+
+```typescript
+/**
+ * Change the code below to run your own script.
+ * ...
+ */
+await page.goto(`https://news.ycombinator.com/news`, { waitUntil: "domcontentloaded" });
+
+for (let rank = 1; rank <= 10; rank++) {
+  await stagehand.act("Click on story title in rank " + rank);
+  await page.goBack();
+}
+```
+
+Replace the `page.goto(...)` and the loop body with your own sequence. You can mix:
+- `stagehand.act("natural language instruction")` — LLM-powered, cached per instruction+URL
+- Direct Playwright calls — `page.click(...)`, `page.fill(...)`, etc. — no LLM involved
+
+Each `act` call is cached independently by instruction text and page URL, so repeated runs only call the LLM for steps that have not been seen before.
+
+### Browser Use (agent mode) — `browser_use/scraper-agent.py`
+
+Edit the `make_task()` function:
+
+```python
+def make_task(n: int) -> list[str]:
+    parts = [f"Go to https://news.ycombinator.com/news."]
+    for i in range(1, n + 1):
+        parts.append(f"click story #{i} title link to open the external link;")
+        parts.append(f"then go back to list;")
+    parts.append(f"Task done, complete;")
+    return parts
+```
+
+The list is joined into a single natural-language task string passed to a single Browser Use `Agent`. Replace the URL and the per-step instructions with your own. The `N_STORIES` env var controls the loop count (`n` parameter); remove or ignore it if your task does not repeat.
+
+### Browser Use (act-equivalent) — `browser_use/scraper.py`
+
+Edit the `make_task()` function in the same way:
+
+```python
+def make_task(n: int) -> list[str]:
+    parts = [f"Go to https://news.ycombinator.com/news."]
+    for i in range(2, n + 2):
+        parts.append(f"click story #{i} title link to open the external link;")
+        parts.append(f"then go back to list;")
+    parts.append(f"Task done, complete;")
+    return parts
+```
+
+Here each element of the list becomes an independent `Agent` call sharing the same browser session. This keeps per-step context small and behaves more like Stagehand's `act` primitive. Each step's result is cached by the SHA-256 hash of the instruction string.
+
+---
+
+## Running the scripts
+
+All configuration is via environment variables (or the `.env` file in each subdirectory).
+
+| Variable | Default | Description |
+|---|---|---|
+| `RUNS` | `3` | How many times to execute the full task sequence |
+| `MODEL_NAME` | see `.env.example` | Groq model identifier |
+| `N_STORIES` | `10` | Number of items to process (used by `make_task`) |
+| `USE_CACHE` | `true` | Set `false` to force fresh LLM calls and overwrite cache |
+| `GROQ_API_KEY` | — | Required for Browser Use scripts |
+
+### Stagehand
+
+```bash
+cd stagehand
+RUNS=3 MODEL_NAME=groq/openai/gpt-oss-20b npx ts-node index.ts
+# or if using the npm start script:
+RUNS=3 MODEL_NAME=groq/openai/gpt-oss-20b npm start
+```
+
+The model is passed directly via `MODEL_NAME` and forwarded to Stagehand's model config. Check [Groq's model list](https://console.groq.com/docs/models) for available identifiers.
+
+### Browser Use — agent mode
+
+```bash
+cd browser_use
+source venv/bin/activate
+RUNS=3 MODEL_NAME=openai/gpt-oss-120b N_STORIES=10 python scraper-agent.py
+```
+
+### Browser Use — act-equivalent
+
+```bash
+cd browser_use
+source venv/bin/activate
+RUNS=3 MODEL_NAME=openai/gpt-oss-20b N_STORIES=10 python scraper.py
+```
+
+### Clear cache (force fresh run)
+
+```bash
+# Browser Use
+USE_CACHE=false python scraper.py
+
+# Stagehand — delete the cache directory
+rm -rf stagehand/cache/
+```
+
+---
+
+## Output
+
+Each run produces a JSON file in `results/` named after the library, mode, timestamp, and model. Example:
+
+```
+results/stagehand_local_1776807967568-1run-oss20b.json
+results/browser_use_act_local_1776814885-1run-oss20b.json
+```
+
+Each file contains per-run metrics:
+
+```json
+{
+  "library": "stagehand",
+  "model": "groq/openai/gpt-oss-20b",
+  "runs": [
+    {
+      "run": 1,
+      "llm_calls": 13,
+      "input_tokens": 131521,
+      "output_tokens": 5422,
+      "cached_input_tokens": 5376,
+      "cache_hits": 0,
+      "duration_ms": 64696
+    }
+  ]
+}
+```
+
+To compare all results in the terminal:
 
 ```bash
 python compare.py
@@ -83,16 +207,10 @@ python compare.py
 
 ---
 
-## Cosa misura
+## Key findings from the reference run
 
-| Metrica | Descrizione |
-|---|---|
-| `llm_calls` | Numero di invocazioni LLM per run |
-| `input_tokens` | Token di input (prompt) |
-| `output_tokens` | Token di output (completion) |
-| `cache_hits` | Quante volte la cache è stata usata |
-| `duration_ms` | Tempo totale del run |
+See [`results/Results.md`](results/Results.md) for the full data. Short version:
 
-L'effetto caching si vede confrontando il **run 1** (sempre da zero) con i **run 2-3**:
-- Stagehand locale: cache miss se il DOM è cambiato (es. upvote su HN)
-- Browser Use Cloud: lo script viene rieseguito diretto, zero LLM calls
+- **Stagehand with oss-20b** completed every run correctly, including after page content changed. It used ~131K input tokens on the first run and nearly zero on subsequent runs (fully cached).
+- **Browser Use (agent mode)** required oss-120b to succeed, consuming ~283K input tokens. It failed after content changes due to stale cache replay.
+- **Browser Use (act-equivalent)** brought the model requirement back down to oss-20b, but token usage remained high (~273K) with the same cache invalidation problem.

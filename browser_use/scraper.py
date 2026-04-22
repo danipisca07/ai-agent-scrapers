@@ -19,7 +19,7 @@ cfg = {
 
 def make_task(n: int) -> list[str]:
     parts = [f"Go to https://news.ycombinator.com/news."]
-    for i in range(1, n + 1):
+    for i in range(2, n + 2):
         parts.append(f"click story #{i} title link to open the external link;")
         parts.append(f"then go back to list;")
     parts.append(f"Task done, complete;")

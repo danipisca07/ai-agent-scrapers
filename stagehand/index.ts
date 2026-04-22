@@ -91,7 +91,7 @@ async function runOnce(runIndex: number): Promise<RunResult> {
       try {
         //Open first 10 stories
         let options = {
-          model: retries > 0 ? "groq/openai/gpt-oss-120b" : undefined
+          //model: retries > 0 ? "groq/openai/gpt-oss-120b" : process.env.MODEL_NAME //You can use this to upgrade model when retring
         }
         let action = "Click on story title in rank " + rank
         var actRes = await stagehand.act(action, options); //here the LLM call is cached for each rank (the first run needs to call the LLM 10 times)
