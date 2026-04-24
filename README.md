@@ -13,12 +13,12 @@ Results from a concrete comparison run are documented in [`results/Results.md`](
 ```
 stagehand-vs-browseruse/
 ├── stagehand/
-│   ├── index.ts           # Stagehand script (TypeScript)
+│   ├── index.ts           # Stagehand script
 │   ├── .env.example
 │   └── package.json
 ├── browser_use/
-│   ├── scraper-agent.py   # Browser Use — full agent mode
-│   ├── scraper.py         # Browser Use — act-equivalent (one agent per step)
+│   ├── scraper-agent.py   # Browser Use script — full agent mode
+│   ├── scraper.py         # Browser Use script — act-equivalent (one agent per step)
 │   ├── .env.example
 │   └── requirements.txt
 ├── results/               # JSON output from each run + Results.md summary
@@ -33,7 +33,7 @@ stagehand-vs-browseruse/
 
 - Node.js ≥ 18 (for Stagehand)
 - Python ≥ 3.11 (for Browser Use)
-- A [Groq](https://console.groq.com) API key (both libraries use Groq-hosted models in this benchmark)
+- A [Groq](https://console.groq.com) API key (both libraries use Groq-hosted models in this benchmark but can be configured to use other providers)
 
 ### Stagehand
 
@@ -41,8 +41,10 @@ stagehand-vs-browseruse/
 cd stagehand
 npm install
 cp .env.example .env
-# Edit .env and set MODEL_NAME and any other required keys
+# Edit .env and set GROQ_API_KEY and MODEL_NAME
 ```
+
+The script is configured to use GROQ as AI Provider but the library can be easly switched to other major providers, checkout [offical docs](https://docs.stagehand.dev/v3/configuration/models)
 
 ### Browser Use
 
@@ -55,6 +57,8 @@ playwright install chromium
 cp .env.example .env
 # Edit .env and set GROQ_API_KEY and MODEL_NAME
 ```
+
+The script is configured to use GROQ as AI Provider but the library can be easly switched to other major providers, checkout [offical docs](https://docs.browser-use.com/open-source/supported-models)
 
 ---
 
@@ -99,7 +103,7 @@ def make_task(n: int) -> list[str]:
     return parts
 ```
 
-The list is joined into a single natural-language task string passed to a single Browser Use `Agent`. Replace the URL and the per-step instructions with your own. The `N_STORIES` env var controls the loop count (`n` parameter); remove or ignore it if your task does not repeat.
+The list is joined into a single natural-language task string passed to a single Browser Use `Agent`. Replace the URL and the per-step instructions with your own.
 
 ### Browser Use (act-equivalent) — `browser_use/scraper.py`
 
@@ -126,10 +130,9 @@ All configuration is via environment variables (or the `.env` file in each subdi
 | Variable | Default | Description |
 |---|---|---|
 | `RUNS` | `3` | How many times to execute the full task sequence |
-| `MODEL_NAME` | see `.env.example` | Groq model identifier |
-| `N_STORIES` | `10` | Number of items to process (used by `make_task`) |
+| `MODEL_NAME` | see `.env.example` | model identifier |
 | `USE_CACHE` | `true` | Set `false` to force fresh LLM calls and overwrite cache |
-| `GROQ_API_KEY` | — | Required for Browser Use scripts |
+| `GROQ_API_KEY` | — | Required |
 
 ### Stagehand
 
@@ -147,7 +150,7 @@ The model is passed directly via `MODEL_NAME` and forwarded to Stagehand's model
 ```bash
 cd browser_use
 source venv/bin/activate
-RUNS=3 MODEL_NAME=openai/gpt-oss-120b N_STORIES=10 python scraper-agent.py
+RUNS=3 MODEL_NAME=openai/gpt-oss-120b python scraper-agent.py
 ```
 
 ### Browser Use — act-equivalent
@@ -155,7 +158,7 @@ RUNS=3 MODEL_NAME=openai/gpt-oss-120b N_STORIES=10 python scraper-agent.py
 ```bash
 cd browser_use
 source venv/bin/activate
-RUNS=3 MODEL_NAME=openai/gpt-oss-20b N_STORIES=10 python scraper.py
+RUNS=3 MODEL_NAME=openai/gpt-oss-20b python scraper.py
 ```
 
 ### Clear cache (force fresh run)
